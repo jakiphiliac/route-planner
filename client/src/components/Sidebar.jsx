@@ -1,3 +1,4 @@
+// client/src/components/Sidebar.jsx
 import SearchBox from "./SearchBox";
 import TripList from "./TripList";
 
@@ -28,7 +29,7 @@ export default function Sidebar(props) {
     const min = route ? Math.round(route.durationSeconds / 60) : null;
 
     return (
-        <div className="sidebar card shadow">
+        <div className="sidebar card shadow" data-bs-theme="dark">
             <div className="card-body">
                 <h5 className="card-title mb-3">Route Planner</h5>
 
@@ -130,7 +131,7 @@ export default function Sidebar(props) {
                 {route && (
                     <div className="alert alert-info py-2 px-3 small mb-2">
                         Total: <strong>{km} km</strong> · ~
-                        <strong>{min} min</strong> (round trip)
+                        <strong>{min} min</strong> driving (round trip)
                     </div>
                 )}
 

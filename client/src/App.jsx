@@ -1,7 +1,35 @@
+// client/src/App.jsx
 import { useState, useEffect, useCallback } from "react";
 import MapView from "./components/MapView";
 import Sidebar from "./components/Sidebar";
 import { api } from "./api";
+
+// --- Throttled reverse-geocoding queue --------------------------------------
+// Nominatim allows ~1 request/second. When the user drops several pins quickly
+// we must NOT fire them all at once, or most get rate-limited and fall back to
+// coordinates. This serialises the calls ~1.1s apart.
+const delay = (ms) => new Promise((r) => setTimeout(r, ms));
+
+let reverseChain = Promise.resolve();
+function queueReverse(lat, lng) {
+    const result = reverseChain.then(async () => {
+        try {
+            return (await api.reverse(lat, lng)).label;
+        } catch {
+            return null; // keep the coordinate placeholder on failure
+        }
+    });
+    // Whatever happens, wait before the next queued call.
+    reverseChain = result.then(
+        () => delay(1100),
+        () => delay(1100),
+    );
+    return result;
+}
+
+let nextCid = 1;
+const makeCid = () => `c${nextCid++}`;
+const coordLabel = (lat, lng) => `${lat.toFixed(5)}, ${lng.toFixed(5)}`;
 
 export default function App() {
     const [mode, setMode] = useState("start"); // 'start' | 'destination'
@@ -31,25 +59,45 @@ export default function App() {
         loadTrips();
     }, [loadTrips]);
 
-    async function labelFor(lat, lng) {
-        try {
-            return (await api.reverse(lat, lng)).label;
-        } catch {
-            return `${lat.toFixed(5)}, ${lng.toFixed(5)}`;
-        }
+    // Resolve a destination's name in the background and patch it in by cid.
+    function resolveDestinationName(cid, lat, lng) {
+        queueReverse(lat, lng).then((label) => {
+            if (!label) return;
+            setDestinations((prev) =>
+                prev.map((d) => (d.cid === cid ? { ...d, label } : d)),
+            );
+        });
     }
 
-    async function handleMapClick(lat, lng) {
-        const label = await labelFor(lat, lng);
+    function handleMapClick(lat, lng) {
         setRoute(null);
-        if (mode === "start") setStart({ lat, lng, label });
-        else setDestinations((prev) => [...prev, { lat, lng, label }]);
+        if (mode === "start") {
+            // Show coordinates instantly, then fill in the name.
+            setStart({ lat, lng, label: coordLabel(lat, lng) });
+            queueReverse(lat, lng).then((label) => {
+                if (label) {
+                    setStart((prev) =>
+                        prev && prev.lat === lat && prev.lng === lng
+                            ? { ...prev, label }
+                            : prev,
+                    );
+                }
+            });
+        } else {
+            const cid = makeCid();
+            setDestinations((prev) => [
+                ...prev,
+                { cid, lat, lng, label: coordLabel(lat, lng) },
+            ]);
+            resolveDestinationName(cid, lat, lng);
+        }
     }
 
     function handleSearchSelect(item) {
         setRoute(null);
+        // Search results already carry a name from Nominatim.
         if (mode === "start") setStart(item);
-        else setDestinations((prev) => [...prev, item]);
+        else setDestinations((prev) => [...prev, { cid: makeCid(), ...item }]);
     }
 
     function handleUseLocation() {
@@ -59,10 +107,14 @@ export default function App() {
                 "Geolocation is not supported by your browser.",
             );
         navigator.geolocation.getCurrentPosition(
-            async (pos) => {
+            (pos) => {
                 const { latitude: lat, longitude: lng } = pos.coords;
-                setStart({ lat, lng, label: await labelFor(lat, lng) });
+                setStart({ lat, lng, label: coordLabel(lat, lng) });
                 setRoute(null);
+                queueReverse(lat, lng).then((label) => {
+                    if (label)
+                        setStart((prev) => (prev ? { ...prev, label } : prev));
+                });
                 flash("success", "Start set to your current location.");
             },
             () =>
@@ -125,6 +177,7 @@ export default function App() {
         setStart(trip.start);
         setDestinations(
             trip.destinations.map((d) => ({
+                cid: makeCid(),
                 label: d.label,
                 lat: d.lat,
                 lng: d.lng,
