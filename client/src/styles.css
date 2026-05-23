@@ -1,0 +1,65 @@
+html,
+body,
+#root {
+    height: 100%;
+    margin: 0;
+}
+.app {
+    position: relative;
+    height: 100vh;
+    width: 100vw;
+    overflow: hidden;
+}
+.map-root {
+    height: 100%;
+    width: 100%;
+}
+
+.sidebar {
+    position: absolute;
+    top: 1rem;
+    left: 1rem;
+    width: 320px;
+    max-width: calc(100vw - 2rem);
+    max-height: calc(100vh - 2rem);
+    overflow-y: auto;
+    z-index: 1000;
+    background: rgba(255, 255, 255, 0.97);
+}
+
+.search-results {
+    z-index: 1100;
+    max-height: 220px;
+    overflow-y: auto;
+}
+
+.marker-pin {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    border-radius: 50%;
+    color: #fff;
+    font-weight: 700;
+    font-size: 13px;
+    border: 2px solid #fff;
+    box-shadow: 0 1px 4px rgba(0, 0, 0, 0.4);
+}
+.marker-start {
+    background: #198754;
+} /* green = start */
+.marker-dest {
+    background: #0d6efd;
+} /* blue  = stop  */
+
+/* Mobile: dock the sidebar to the bottom of the screen */
+@media (max-width: 575.98px) {
+    .sidebar {
+        top: auto;
+        bottom: 0;
+        left: 0;
+        width: 100%;
+        max-width: 100%;
+        max-height: 55vh;
+        border-radius: 1rem 1rem 0 0;
+    }
+}
