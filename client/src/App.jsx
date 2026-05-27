@@ -4,10 +4,7 @@ import MapView from "./components/MapView";
 import Sidebar from "./components/Sidebar";
 import { api } from "./api";
 
-// --- Throttled reverse-geocoding queue --------------------------------------
-// Nominatim allows ~1 request/second. When the user drops several pins quickly
-// we must NOT fire them all at once, or most get rate-limited and fall back to
-// coordinates. This serialises the calls ~1.1s apart.
+// --- Throttled reverse-geocoding queue (be polite to the geocoder) ---
 const delay = (ms) => new Promise((r) => setTimeout(r, ms));
 
 let reverseChain = Promise.resolve();
@@ -16,10 +13,9 @@ function queueReverse(lat, lng) {
         try {
             return (await api.reverse(lat, lng)).label;
         } catch {
-            return null; // keep the coordinate placeholder on failure
+            return null;
         }
     });
-    // Whatever happens, wait before the next queued call.
     reverseChain = result.then(
         () => delay(1100),
         () => delay(1100),
@@ -41,6 +37,7 @@ export default function App() {
     const [editingId, setEditingId] = useState(null);
     const [message, setMessage] = useState(null);
     const [busy, setBusy] = useState(false);
+    const [focus, setFocus] = useState(null); // coordinate the map should fly to
 
     const flash = useCallback((type, text) => {
         setMessage({ type, text });
@@ -59,7 +56,6 @@ export default function App() {
         loadTrips();
     }, [loadTrips]);
 
-    // Resolve a destination's name in the background and patch it in by cid.
     function resolveDestinationName(cid, lat, lng) {
         queueReverse(lat, lng).then((label) => {
             if (!label) return;
@@ -72,16 +68,14 @@ export default function App() {
     function handleMapClick(lat, lng) {
         setRoute(null);
         if (mode === "start") {
-            // Show coordinates instantly, then fill in the name.
             setStart({ lat, lng, label: coordLabel(lat, lng) });
             queueReverse(lat, lng).then((label) => {
-                if (label) {
+                if (label)
                     setStart((prev) =>
                         prev && prev.lat === lat && prev.lng === lng
                             ? { ...prev, label }
                             : prev,
                     );
-                }
             });
         } else {
             const cid = makeCid();
@@ -95,33 +89,40 @@ export default function App() {
 
     function handleSearchSelect(item) {
         setRoute(null);
-        // Search results already carry a name from Nominatim.
+        setFocus({ lat: item.lat, lng: item.lng }); // fly to the searched place
         if (mode === "start") setStart(item);
         else setDestinations((prev) => [...prev, { cid: makeCid(), ...item }]);
     }
 
     function handleUseLocation() {
-        if (!navigator.geolocation)
+        if (!navigator.geolocation) {
             return flash(
                 "warning",
                 "Geolocation is not supported by your browser.",
             );
+        }
         navigator.geolocation.getCurrentPosition(
             (pos) => {
                 const { latitude: lat, longitude: lng } = pos.coords;
                 setStart({ lat, lng, label: coordLabel(lat, lng) });
                 setRoute(null);
+                setFocus({ lat, lng }); // move the map to wherever you actually are
                 queueReverse(lat, lng).then((label) => {
                     if (label)
                         setStart((prev) => (prev ? { ...prev, label } : prev));
                 });
                 flash("success", "Start set to your current location.");
             },
-            () =>
-                flash(
-                    "danger",
-                    "Could not get your location. Allow access or set the start manually.",
-                ),
+            (err) => {
+                const msg =
+                    err.code === err.PERMISSION_DENIED
+                        ? "Location permission was denied. Allow it from the browser address bar, or set the start by clicking the map."
+                        : err.code === err.TIMEOUT
+                          ? "Getting your location timed out. Try again, or set the start manually."
+                          : "Could not get your location. Set the start by clicking the map or using search.";
+                flash("danger", msg);
+            },
+            { enableHighAccuracy: true, timeout: 10000, maximumAge: 0 },
         );
     }
 
@@ -186,9 +187,10 @@ export default function App() {
         setTripName(trip.name);
         setEditingId(trip.id);
         setRoute(null);
+        setFocus({ lat: trip.start.lat, lng: trip.start.lng }); // fly to the loaded trip
         flash(
             "info",
-            `Loaded "${trip.name}". Edit or re-optimise, then Update.`,
+            `Loaded "${trip.name}". Eit or re-optimise, then Update.`,
         );
     }
 
@@ -217,6 +219,7 @@ export default function App() {
                 start={start}
                 destinations={destinations}
                 route={route}
+                focus={focus}
                 onMapClick={handleMapClick}
             />
             <Sidebar
