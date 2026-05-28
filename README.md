@@ -19,10 +19,6 @@ You pick a start point and any number of destinations on an interactive map, the
 
 ### Install & run
 
-```sh
-git clone <repo-url>
-cd route-planner
-
 npm install            # server dependencies
 npm run client:install # client dependencies (separate package under client/)
 
