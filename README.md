@@ -19,7 +19,9 @@ You pick a start point and any number of destinations on an interactive map, the
 
 ### Install & run
 
-npm install            # server dependencies
-npm run client:install # client dependencies (separate package under client/)
-
-npm run dev            # starts both server (port 3000) and Vite dev server (port 5173)
+```bash
+git clone https://github.com/jakiphiliac/route-planner.git
+cd route-planner
+npm install
+npm start
+```
