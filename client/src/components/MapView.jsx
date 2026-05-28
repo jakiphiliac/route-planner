@@ -1,4 +1,5 @@
 // client/src/components/MapView.jsx
+import { useEffect } from "react";
 import {
     MapContainer,
     TileLayer,
@@ -6,6 +7,7 @@ import {
     Popup,
     Polyline,
     useMapEvents,
+    useMap,
 } from "react-leaflet";
 import L from "leaflet";
 import markerIcon2x from "leaflet/dist/images/marker-icon-2x.png";
@@ -41,7 +43,26 @@ function ClickHandler({ onMapClick }) {
     return null;
 }
 
-export default function MapView({ start, destinations, route, onMapClick }) {
+// Smoothly moves the map whenever `focus` changes (geolocation, search, trip load).
+function Recenter({ focus }) {
+    const map = useMap();
+    useEffect(() => {
+        if (focus) {
+            map.flyTo([focus.lat, focus.lng], Math.max(map.getZoom(), 14), {
+                duration: 0.8,
+            });
+        }
+    }, [focus, map]);
+    return null;
+}
+
+export default function MapView({
+    start,
+    destinations,
+    route,
+    focus,
+    onMapClick,
+}) {
     const center = start ? [start.lat, start.lng] : [47.4979, 19.0402]; // default: Budapest
 
     return (
@@ -53,6 +74,7 @@ export default function MapView({ start, destinations, route, onMapClick }) {
                 maxZoom={20}
             />
             <ClickHandler onMapClick={onMapClick} />
+            <Recenter focus={focus} />
 
             {start && (
                 <Marker position={[start.lat, start.lng]} icon={startIcon}>
